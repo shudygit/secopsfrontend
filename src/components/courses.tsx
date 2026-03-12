@@ -8,7 +8,7 @@ interface Course {
   }
 
   
-// Registration component that handles both student and teacher signup
+// Registration component that handles both student and teacher signup hello
 const Register: React.FC<{ onRegister: () => void }> = ({ onRegister }) => {
   const [formData, setFormData] = useState({
     username: '',
