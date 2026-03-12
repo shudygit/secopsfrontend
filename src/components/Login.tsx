@@ -15,7 +15,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToRegister }) => {
     try {
       await onLogin(credentials);
     } catch (error) {
-      setError('Login failed. Please check your credentials.');
+      setError('Login failed. Check your credentials.');
     }
   };
 
