@@ -1,0 +1,141 @@
+name: Frontend CI/CD
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  DOCKER_IMAGE: ${{ secrets.DOCKER_USERNAME }}/lms-frontend
+  REACT_APP_API_URL: http://${{ secrets.SERVER_IP }}
+
+jobs:
+  security-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Setup Node
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      # Install dependencies
+      - name: Install dependencies
+        run: |
+          npm install
+
+      # Build React app
+      - name: Build frontend
+        run: |
+          npm run build
+
+      # SonarCloud Scan
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@v6
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      # Snyk Scan
+      - name: Run Snyk Test
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      # Upload results to Snyk Dashboard
+      - name: Upload results to Snyk Dashboard
+        run: |
+          npm install -g snyk
+          snyk auth ${{ secrets.SNYK_TOKEN }}
+          snyk monitor
+
+      # Docker login
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # Build and push Docker image
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          build-args: |
+            REACT_APP_API_URL=${{ env.REACT_APP_API_URL }}
+          push: true
+          tags: ${{ env.DOCKER_IMAGE }}:latest
+
+  deploy:
+    needs: security-and-build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+
+    steps:
+      # Checkout
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Setup SSH
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+
+      # Deploy frontend container
+      - name: Deploy frontend container
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} '
+            docker-compose pull frontend
+            docker-compose up -d --no-deps frontend
+          '
+
+      # Wait until frontend is ready
+      - name: Wait for frontend to be ready
+        run: |
+          echo "Waiting for frontend to start..."
+          for i in {1..30}; do
+            if curl -s http://${{ secrets.SERVER_IP }} >/dev/null; then
+              echo "Frontend is up!"
+              break
+            fi
+            sleep 2
+          done
+
+      # Run ZAP scan on VM
+      - name: Run ZAP on VM
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} '
+            docker pull ghcr.io/zaproxy/zaproxy:stable
+            docker run --rm -v /tmp:/zap/wrk -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+              -t http://${{ secrets.SERVER_IP }} \
+              -r zap_report_frontend.html \
+              -I -d
+          '
+
+      # Copy ZAP report from VM
+      - name: Download ZAP report
+        run: |
+          scp ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/tmp/zap_report_frontend.html ./zap_report_frontend.html
+
+      # Upload ZAP report artifact
+      - name: Upload ZAP Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-reports-frontend
+          path: zap_report_frontend.html
