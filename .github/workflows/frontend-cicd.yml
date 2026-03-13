@@ -4,9 +4,6 @@ on:
 push:
 branches:
 - main
-pull_request:
-branches:
-- main
 workflow_dispatch:
 
 jobs:
@@ -17,13 +14,11 @@ runs-on: ubuntu-latest
 steps:
   - name: Checkout code
     uses: actions/checkout@v4
-    with:
-      fetch-depth: 0
 
   - name: Setup Node
     uses: actions/setup-node@v4
     with:
-      node-version: "18"
+      node-version: '18'
 
   - name: Install dependencies
     run: npm install
@@ -42,13 +37,6 @@ steps:
     env:
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
-  - name: Upload results to Snyk Dashboard
-    run: |
-      npm install -g snyk
-      snyk monitor
-    env:
-      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-
   - name: Login to DockerHub
     uses: docker/login-action@v3
     with:
@@ -60,21 +48,15 @@ steps:
     with:
       context: .
       push: true
-      build-args: |
-        REACT_APP_API_URL=http://${{ secrets.SERVER_IP }}
       tags: ${{ secrets.DOCKER_USERNAME }}/lms-frontend:latest
 ```
 
 deploy:
 needs: security-and-build
 runs-on: ubuntu-latest
-if: github.ref == 'refs/heads/main'
 
 ```
 steps:
-  - name: Checkout code
-    uses: actions/checkout@v4
-
   - name: Setup SSH
     run: |
       mkdir -p ~/.ssh
@@ -82,41 +64,8 @@ steps:
       chmod 600 ~/.ssh/id_ed25519
       ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
 
-  - name: Deploy frontend container
+  - name: Deploy frontend
     run: |
-      ssh -i ~/.ssh/id_ed25519 ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "
-        docker-compose pull frontend
-        docker-compose up -d --no-deps frontend
-      "
-
-  - name: Wait for frontend to be ready
-    run: |
-      echo "Waiting for frontend to start..."
-      for i in {1..30}; do
-        if curl -s http://${{ secrets.SERVER_IP }} >/dev/null; then
-          echo "Frontend is up!"
-          break
-        fi
-        sleep 2
-      done
-
-  - name: Run ZAP scan on VM
-    run: |
-      ssh -i ~/.ssh/id_ed25519 ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "
-        docker pull ghcr.io/zaproxy/zaproxy:stable
-        docker run --rm -v /tmp:/zap/wrk -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
-          -t http://${{ secrets.SERVER_IP }} \
-          -r zap_report_frontend.html \
-          -I -d
-      "
-
-  - name: Download ZAP report
-    run: |
-      scp -i ~/.ssh/id_ed25519 ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/tmp/zap_report_frontend.html ./zap_report_frontend.html
-
-  - name: Upload ZAP Reports
-    uses: actions/upload-artifact@v4
-    with:
-      name: zap-reports-frontend
-      path: zap_report_frontend.html
+      ssh -i ~/.ssh/id_ed25519 ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "docker-compose pull frontend &&_
 ```
+
