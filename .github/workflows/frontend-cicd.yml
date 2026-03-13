@@ -2,12 +2,11 @@ name: Frontend CI/CD
 
 on:
 push:
-branches: [main]
+branches:
+- main
 pull_request:
-branches: [main]
-
-env:
-DOCKER_IMAGE: ${{ secrets.DOCKER_USERNAME }}/lms-frontend
+branches:
+- main
 
 jobs:
 security-and-build:
@@ -62,7 +61,7 @@ steps:
       push: true
       build-args: |
         REACT_APP_API_URL=http://${{ secrets.SERVER_IP }}
-      tags: ${{ env.DOCKER_IMAGE }}:latest
+      tags: ${{ secrets.DOCKER_USERNAME }}/lms-frontend:latest
 ```
 
 deploy:
@@ -71,11 +70,6 @@ runs-on: ubuntu-latest
 if: github.ref == 'refs/heads/main'
 
 ```
-permissions:
-  contents: read
-  issues: write
-  pull-requests: write
-
 steps:
   - name: Checkout code
     uses: actions/checkout@v4
@@ -105,7 +99,7 @@ steps:
         sleep 2
       done
 
-  - name: Run ZAP on VM
+  - name: Run ZAP scan on VM
     run: |
       ssh -i ~/.ssh/id_ed25519 ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "
         docker pull ghcr.io/zaproxy/zaproxy:stable
