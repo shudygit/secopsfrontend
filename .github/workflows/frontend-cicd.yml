@@ -71,5 +71,5 @@ jobs:
           ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
 
       - name: Deploy frontend container
-  	run: |
-    	  ssh -i ~/.ssh/id_ed25519 ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "cd /home/shudhatmj16/code-lab1 && docker-compose pull frontend && docker-compose up -d --no-deps frontend"
+        run: |
+          ssh -i ~/.ssh/id_ed25519 ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "cd /home/shudhatmj16/code-lab1 && docker-compose pull frontend && docker-compose up -d --no-deps frontend"
