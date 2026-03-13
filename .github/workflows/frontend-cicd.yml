@@ -12,13 +12,13 @@ runs-on: ubuntu-latest
 
 ```
 steps:
-  - name: Checkout code
+  - name: Checkout repository
     uses: actions/checkout@v4
 
   - name: Setup Node
     uses: actions/setup-node@v4
     with:
-      node-version: '18'
+      node-version: "18"
 
   - name: Install dependencies
     run: npm install
@@ -37,6 +37,13 @@ steps:
     env:
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
+  - name: Upload results to Snyk Dashboard
+    run: |
+      npm install -g snyk
+      snyk monitor
+    env:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
   - name: Login to DockerHub
     uses: docker/login-action@v3
     with:
@@ -49,6 +56,8 @@ steps:
       context: .
       push: true
       tags: ${{ secrets.DOCKER_USERNAME }}/lms-frontend:latest
+      build-args: |
+        REACT_APP_API_URL=http://${{ secrets.SERVER_IP }}
 ```
 
 deploy:
@@ -64,8 +73,8 @@ steps:
       chmod 600 ~/.ssh/id_ed25519
       ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
 
-  - name: Deploy frontend
+  - name: Deploy frontend container
     run: |
-      ssh -i ~/.ssh/id_ed25519 ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "docker-compose pull frontend &&_
+      ssh -i ~/.ssh/id_ed25519 ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "docker-compose pull frontend && docker-compose up -d --no-deps frontend"
 ```
 
