@@ -77,3 +77,31 @@ jobs:
           docker-compose pull frontend &&
           docker-compose up -d --no-deps frontend
           "
+# Wait until frontend is ready
+      - name: Wait for frontend to be ready
+        run: |
+          echo "Waiting for frontend to start..."
+          for i in {1..30}; do
+            if curl -s http://${{ secrets.SERVER_IP }} >/dev/null; then
+              echo "Frontend is up!"
+              break
+            fi
+            sleep 2
+          done
+
+# Run ZAP scan on VM
+      - name: Run ZAP on VM
+        run: |
+          ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=yes -i ~/.ssh/id_ed25519 ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "docker pull ghcr.io/zaproxy/zaproxy:stable && docker run --rm -v /tmp:/zap/wrk -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://${{ secrets.SERVER_IP }} -r zap_report_frontend.html -I -d"
+
+# Copy ZAP report from VM
+      - name: Download ZAP report
+        run: |
+          scp -o StrictHostKeyChecking=no -o IdentitiesOnly=yes -i ~/.ssh/id_ed25519 ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/tmp/zap_report_frontend.html ./zap_report_frontend.html
+
+# Upload ZAP report artifact
+      - name: Upload ZAP Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-reports-frontend
+          path: zap_report_frontend.html
